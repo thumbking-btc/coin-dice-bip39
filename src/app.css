@@ -39,6 +39,7 @@ body {
 
 button, select, textarea { font: inherit; }
 button, select, textarea, summary { -webkit-tap-highlight-color: transparent; }
+button, summary, .task-option { touch-action: manipulation; }
 button:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible, [tabindex="-1"]:focus-visible, .sequence-groups:focus-visible {
   outline: 3px solid var(--amber);
   outline-offset: 3px;
