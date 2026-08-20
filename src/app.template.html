@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="referrer" content="no-referrer">
+  <meta name="description" content="동전·주사위로 BIP39 니모닉을 만들고 마지막 단어 후보를 확인하는 단일 오프라인 HTML 도구">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'none'; font-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>동전·주사위로 BIP39 니모닉 만들기</title>
+  <style>
+/*__APP_CSS__*/
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="shell topbar-inner">
+      <h1 class="brand"><span class="brand-mark" aria-hidden="true"></span><span>동전·주사위로 BIP39 니모닉 만들기</span></h1>
+      <div class="topbar-actions">
+        <div class="status-cluster" role="group" aria-label="도구 상태">
+          <div class="health" id="health" role="status">자체 검증 중…</div>
+          <div class="network-status checking" id="network-status" role="status" aria-live="polite" aria-atomic="true" aria-describedby="network-status-caveat">브라우저 연결 확인 중…</div>
+        </div>
+        <button class="cover-button" id="emergency-cover" type="button">화면 가리기</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="shell" id="app">
+    <details class="security-note">
+      <summary>
+        <span class="security-summary-copy">
+          <strong>실제 자금용은 전용 오프라인 기기에서만 사용하세요.</strong>
+          <small id="network-status-caveat">브라우저의 ‘오프라인’ 표시는 물리적 네트워크 격리나 기기 안전을 증명하지 않습니다.</small>
+        </span>
+        <span>보안 주의 보기</span>
+      </summary>
+      <p>이 파일은 네트워크·저장소·클립보드 API를 사용하지 않지만, 악성 운영체제·브라우저 확장·키로거·화면 녹화는 막을 수 없습니다. 상단의 자체검사는 내장 단어 목록과 계산 예만 확인하며 입력의 무작위성이나 기기의 안전을 보증하지 않습니다. 검증된 하드웨어 지갑의 내장 생성기가 일반적으로 더 안전합니다.</p>
+      <p><strong>상단 연결 표시는 외부 서버에 접속하지 않고 브라우저가 제공하는 연결 신호만 읽습니다.</strong> ‘오프라인’이어도 Wi-Fi·유선·셀룰러·Bluetooth의 실제 분리, 운영체제·브라우저의 안전 또는 나중 재연결 시 유출 가능성을 확인하지 못합니다.</p>
+    </details>
+
+    <noscript><p class="notice">JavaScript가 꺼져 있어 계산할 수 없습니다.</p></noscript>
+
+    <section class="task-picker" aria-labelledby="task-title">
+      <h2 class="sr-only" id="task-title">작업 선택</h2>
+      <div class="task-options" role="radiogroup" aria-labelledby="task-title">
+        <label class="task-option">
+          <input type="radio" name="tool-task" value="generate" aria-controls="generator-flow" checked>
+          <strong>새 복구 단어 만들기</strong>
+        </label>
+        <label class="task-option">
+          <input type="radio" name="tool-task" value="candidate" aria-controls="candidate-flow">
+          <strong>마지막 단어 후보 보기</strong>
+        </label>
+      </div>
+    </section>
+
+    <div class="layout">
+      <section class="card" id="candidate-flow" aria-labelledby="candidate-title" hidden>
+        <div class="card-head">
+          <div>
+            <h2 id="candidate-title">마지막 단어 후보 보기</h2>
+            <p>기존 앞 단어에 붙을 수 있는 모든 BIP39 유효 후보를 계산합니다.</p>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="safety-message candidate-warning">
+            <strong>원래 마지막 단어 하나를 특정하는 기능이 아닙니다.</strong>
+            <span>표시되는 후보마다 서로 다른 지갑입니다.</span>
+          </div>
+          <div class="candidate-config">
+            <div class="field candidate-length-field">
+              <div class="field-label-row">
+                <label for="candidate-word-count">전체 복구 단어 길이</label>
+                <button class="help-trigger" type="button" data-help-trigger="candidate-count-help" aria-expanded="false" aria-controls="candidate-count-help" aria-label="마지막 단어 후보 수 도움말"><span aria-hidden="true">?</span></button>
+              </div>
+              <select id="candidate-word-count">
+                <option value="12">12단어 · 앞 11단어 입력</option>
+                <option value="15">15단어 · 앞 14단어 입력</option>
+                <option value="18">18단어 · 앞 17단어 입력</option>
+                <option value="21">21단어 · 앞 20단어 입력</option>
+                <option value="24">24단어 · 앞 23단어 입력</option>
+              </select>
+            </div>
+            <p class="candidate-help" id="candidate-explanation"></p>
+            <div class="inline-help candidate-count-help" id="candidate-count-help" role="note" tabindex="-1" hidden>
+              <div class="inline-help-head"><strong>왜 길이에 따라 후보 수가 다른가요?</strong><button type="button" data-help-close aria-label="후보 수 도움말 닫기">닫기</button></div>
+              <p>앞 단어를 고정해도 마지막 단어에 들어갈 일부 난수 비트는 아직 모릅니다. 체크섬은 그 난수에서 자동 계산되므로, 모르는 난수 비트가 적은 24단어 쪽의 후보가 더 적습니다.</p>
+              <table class="help-table">
+                <thead><tr><th>전체</th><th>앞 단어</th><th>모르는 난수</th><th>후보</th></tr></thead>
+                <tbody>
+                  <tr><td>12</td><td>11</td><td>7비트</td><td>128개</td></tr>
+                  <tr><td>15</td><td>14</td><td>6비트</td><td>64개</td></tr>
+                  <tr><td>18</td><td>17</td><td>5비트</td><td>32개</td></tr>
+                  <tr><td>21</td><td>20</td><td>4비트</td><td>16개</td></tr>
+                  <tr><td>24</td><td>23</td><td>3비트</td><td>8개</td></tr>
+                </tbody>
+              </table>
+              <p>체크섬이 유효하다는 사실은 원래 지갑이나 소유권을 증명하지 않습니다.</p>
+            </div>
+            <label><span id="candidate-prefix-label">앞 11단어</span>
+              <textarea id="candidate-prefix" lang="en" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" placeholder="BIP39 영문 단어 11개를 공백으로 구분해 입력"></textarea>
+            </label>
+            <p class="candidate-secret-note">앞 단어와 후보는 모두 비밀입니다. 마지막 한 단어만 숨긴 백업은 안전한 비밀 분할이 아니며, 붙여넣은 뒤 운영체제 클립보드를 직접 지우세요.</p>
+          </div>
+          <div class="candidate-count-row">
+            <span id="candidate-input-count">0 / 11단어</span>
+            <span>대소문자·오타·축약은 자동 보정하지 않습니다</span>
+          </div>
+          <p class="candidate-status" id="candidate-status">앞 단어를 입력한 뒤 가능한 후보 계산을 누르세요.</p>
+          <div class="action-row">
+            <button class="primary-button" id="candidate-calculate" type="button">가능한 후보 계산</button>
+            <button class="secondary-button" id="candidate-clear" type="button" disabled>입력·후보 지우기</button>
+          </div>
+          <section class="candidate-results" id="candidate-results" aria-labelledby="candidate-result-title" hidden>
+            <div class="candidate-result-head">
+              <div>
+                <h3 id="candidate-result-title" tabindex="-1">유효한 마지막 단어 후보</h3>
+                <p class="candidate-summary" id="candidate-summary"></p>
+              </div>
+              <label class="meta-toggle"><input id="candidate-meta-toggle" type="checkbox"> 검증 비트 보기</label>
+            </div>
+            <ol class="candidate-grid" id="candidate-grid"></ol>
+            <details class="candidate-footnote">
+              <summary>후보 비트 읽는 법</summary>
+              <p>추가 비트의 첫 글자가 남은 난수의 최상위 비트입니다. 새 지갑은 위 목록에서 단어를 고르지 말고 ‘새 복구 단어 만들기’에서 전체 난수를 모아 만드세요. 이 비트는 원래 단어를 판별하는 기능이 아닙니다.</p>
+            </details>
+          </section>
+        </div>
+      </section>
+
+      <div class="generator-flow" id="generator-flow">
+
+      <section class="card generator-card" aria-labelledby="setup-title">
+        <div class="card-head">
+          <div>
+            <h2 id="setup-title">새 복구 단어 만들기</h2>
+            <p>설정을 고른 뒤 동전이나 주사위 결과를 입력하세요.</p>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="config-grid">
+            <div class="field">
+              <label for="source">물리 입력</label>
+              <select id="source">
+                <option value="coin">동전 · 앞면/뒷면</option>
+                <option value="dice">육면체 주사위 · 1~6</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="word-count">완성할 길이</label>
+              <select id="word-count">
+                <option value="12">12단어 · 128비트</option>
+                <option value="15">15단어 · 160비트</option>
+                <option value="18">18단어 · 192비트</option>
+                <option value="21">21단어 · 224비트</option>
+                <option value="24">24단어 · 256비트</option>
+              </select>
+              <p class="field-note" id="word-count-note" hidden>이 길이는 BIP39 규격에 유효하지만 일부 지갑이 복구를 지원하지 않을 수 있습니다. 사용할 지갑에서 먼저 확인하세요.</p>
+            </div>
+            <div class="field wide-config">
+              <div class="field-label-row">
+                <label for="derivation-mode">입력 기록을 난수 비트로 처리하는 방법</label>
+                <button class="help-trigger" type="button" data-help-trigger="derivation-help" aria-expanded="false" aria-controls="derivation-help" aria-label="난수 비트 계산 방식 도움말"><span aria-hidden="true">?</span></button>
+              </div>
+              <select id="derivation-mode">
+                <option value="direct-entropy-bits-v1">변환된 비트를 그대로 사용 · 모두 모은 뒤 완성</option>
+                <option value="cumulative-transcript-sha256-v1">입력 기록을 SHA-256으로 변환 · 매 입력마다 미리보기</option>
+              </select>
+              <div class="inline-help" id="derivation-help" role="note" tabindex="-1" hidden>
+                <div class="inline-help-head"><strong>두 계산 방식은 무엇이 다른가요?</strong><button type="button" data-help-close aria-label="계산 방식 도움말 닫기">닫기</button></div>
+                <p><strong>난수 비트 직접 사용</strong>은 동전·주사위에서 얻은 비트를 순서대로 BIP39 난수로 씁니다. 필요한 비트를 모두 모은 뒤 복구 단어가 완성됩니다.</p>
+                <p><strong>입력 기록 SHA-256</strong>은 지금까지의 기록 전체를 매번 섞어 첫 입력부터 단어를 미리 보여 줍니다. SHA-256은 부족하거나 편향된 물리 난수를 늘리거나 고치지 않습니다.</p>
+                <p>동전·주사위를 난수 비트로 바꾸는 규칙은 이 도구가 정한 규칙이며, BIP39는 완성된 난수 비트에서 단어와 체크섬을 만드는 부분을 규정합니다. 같은 입력도 두 방식에서는 서로 다른 지갑이 되므로 외부 도구와 비교할 때 입력 형식과 계산 방식을 모두 맞춰야 합니다.</p>
+              </div>
+            </div>
+            <div class="field wide-config" id="dice-method-wrap" hidden>
+              <div class="field-label-row">
+                <label for="dice-method">주사위 눈을 비트로 바꾸는 방법</label>
+                <button class="help-trigger" type="button" data-help-trigger="dice-method-help" aria-expanded="false" aria-controls="dice-method-help" aria-label="주사위 비트 변환 방식 도움말"><span aria-hidden="true">?</span></button>
+              </div>
+              <select id="dice-method">
+                <option value="dice-variable-bits-v1">한 눈씩 변환 · 한 번에 1~2비트</option>
+                <option value="dice-pair-rejection-v1">두 눈씩 묶어 변환 · 일부 쌍은 버림</option>
+              </select>
+              <div class="inline-help" id="dice-method-help" role="note" tabindex="-1" hidden>
+                <div class="inline-help-head"><strong>두 주사위 규칙 모두 편향이 없나요?</strong><button type="button" data-help-close aria-label="주사위 변환 도움말 닫기">닫기</button></div>
+                <p>공정하고 서로 독립인 육면체 주사위라면 두 방식 모두 편향 없는 비트를 만듭니다.</p>
+                <p><strong>한 눈씩</strong>은 매 굴림을 1~2비트로 바꿉니다. <strong>두 눈씩</strong>은 순서대로 두 눈을 묶어 5비트로 만들고 일부 쌍은 앱이 계산에서 제외합니다.</p>
+                <p>실제로 나온 모든 눈은 삭제하거나 다시 굴리지 말고 순서대로 입력하세요. 규칙이 다르면 같은 눈 순서에서도 다른 니모닉이 나옵니다.</p>
+              </div>
+            </div>
+          </div>
+          <p class="configuration-note" id="configuration-change-note" hidden></p>
+          <p class="mode-guide" id="mode-summary"></p>
+          <details class="advanced-config" id="conversion-details">
+            <summary><span id="conversion-settings-summary">계산 규칙·재현 방법 자세히 보기</span></summary>
+            <div class="algorithm-guide">
+              <article>
+                <h4>난수 비트 직접 사용</h4>
+                <p>동전의 0/1 또는 선택한 주사위 변환에서 나온 비트를 순서대로 이어 BIP39 엔트로피로 그대로 사용합니다. 목표 비트를 모두 모은 뒤에만 니모닉이 완성됩니다. SHA-256은 마지막 체크섬 계산에만 사용됩니다.</p>
+              </article>
+              <article>
+                <h4>전체 입력 기록 SHA-256</h4>
+                <p>지금까지의 입력을 하나의 문자 기록으로 만든 뒤 기록 전체를 SHA-256하고, 앞에서부터 필요한 엔트로피 비트를 사용합니다. 첫 입력부터 전체 단어가 보이지만 해시는 부족한 물리 난수를 늘리지 않으므로 목표 수집량 전에는 사용하면 안 됩니다.</p>
+              </article>
+            </div>
+            <div class="dice-rule-guide" id="dice-rule-guide" hidden>
+                <p><strong>공정성 전제:</strong> 공정하고 서로 독립인 육면체 주사위라면 두 방식 모두 편향 없는 비트를 만듭니다. 한 눈 방식은 1비트 결과 0·1과 2비트 결과 00·01·10·11을 각각 같은 수의 눈에 배정합니다. 기울어지거나 서로 연관된 굴림의 편향은 고치지 못합니다.</p>
+                <p><strong>한 눈씩:</strong> 1→01, 2→10, 3→11, 4→0, 5→1, 6→00으로 바꿔 이어 붙입니다. 목표보다 한 비트 많아지면 맨 앞의 초과 비트를 앱이 자동 제외합니다.</p>
+                <p><strong>두 눈씩:</strong> 두 눈을 0~35로 바꾸고 0~31만 5비트로 씁니다. (6,3)·(6,4)·(6,5)·(6,6)은 그 쌍을 버립니다.</p>
+                <p><strong>주의:</strong> 실제 눈은 모두 기록하세요. 초과 비트와 폐기 쌍은 앱이 계산에서 처리하므로 사용자가 지우거나 다시 굴리면 안 됩니다. 같은 주사위 순서라도 두 규칙의 결과는 다릅니다.</p>
+            </div>
+            <h4 class="current-method-title">현재 선택의 실제 계산 순서</h4>
+            <p class="method" id="method-explanation"></p>
+          </details>
+
+          <div class="input-stage" aria-labelledby="input-title">
+            <div class="subsection-head">
+              <h3 id="input-title">물리 난수 입력</h3>
+              <p>직접 입력·붙여넣기하거나 버튼과 숫자 키로 한 번씩 추가할 수 있습니다.</p>
+            </div>
+
+            <p class="safety-message input-safety"><strong>실제로 나온 모든 결과를 순서대로 한 번씩 입력하세요.</strong> 예시나 사람이 고른 패턴을 쓰거나, 마음에 들지 않는 결과·중간 단어를 버리거나 다시 시작하면 보안이 약해집니다. 공정하고 서로 독립인 동전·주사위를 사용해야 하며, 이 변환은 기울어진 도구의 편향을 고치지 못합니다.</p>
+
+            <section class="physical-input-wrap" aria-labelledby="physical-input-label">
+              <div class="physical-input-head">
+                <label id="physical-input-label" for="physical-input">입력값
+                  <span id="physical-input-format">동전은 0 또는 1</span>
+                </label>
+                <output id="input-count" for="physical-input">0회</output>
+              </div>
+              <textarea class="physical-input" id="physical-input" inputmode="numeric" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" wrap="soft" aria-describedby="physical-input-help physical-input-status" aria-errormessage="physical-input-status" placeholder="0과 1을 실제로 나온 순서대로 입력"></textarea>
+              <p class="physical-input-help" id="physical-input-help">직접 수정·복사·붙여넣기할 수 있습니다. 입력이 길어지면 입력창 안에서 스크롤됩니다. 공백과 줄바꿈은 계산에서 제외되며, 복사한 기록은 운영체제 클립보드에 남을 수 있습니다.</p>
+              <p class="physical-input-status" id="physical-input-status" role="alert" hidden></p>
+            </section>
+
+            <div class="action-row input-actions">
+              <button class="secondary-button" id="undo" type="button" disabled>마지막 값 지우기</button>
+              <button class="secondary-button" id="clear" type="button" disabled>입력 전체 지우기</button>
+            </div>
+
+            <div class="progress-block">
+              <div class="progress-row">
+                <span class="progress-label" id="progress-label">모인 난수 비트</span>
+                <strong id="progress-text">0 / 128 비트</strong>
+              </div>
+              <progress id="entropy-progress" max="128" value="0" aria-label="모인 난수 비트">0%</progress>
+              <p class="input-stats" id="input-stats"></p>
+              <p class="pending" id="pending-pair" hidden></p>
+            </div>
+
+            <div class="quick-input-head">
+              <h4>빠른 입력 버튼</h4>
+              <p>버튼을 누르면 입력창 끝에 한 번의 결과가 추가됩니다.</p>
+            </div>
+
+            <div class="input-zone" id="coin-controls">
+              <div class="button-grid coin">
+                <button class="entropy-button" type="button" data-input="0">앞면<small>0 키</small></button>
+                <button class="entropy-button" type="button" data-input="1">뒷면<small>1 키</small></button>
+              </div>
+            </div>
+
+            <div class="input-zone" id="dice-controls" hidden>
+              <div class="button-grid dice" aria-label="주사위 눈 입력">
+                <button class="entropy-button" type="button" data-input="1">1</button>
+                <button class="entropy-button" type="button" data-input="2">2</button>
+                <button class="entropy-button" type="button" data-input="3">3</button>
+                <button class="entropy-button" type="button" data-input="4">4</button>
+                <button class="entropy-button" type="button" data-input="5">5</button>
+                <button class="entropy-button" type="button" data-input="6">6</button>
+              </div>
+            </div>
+
+            <section class="card embedded-output" id="live-panel" aria-labelledby="live-title">
+              <div class="card-head">
+                <div class="pane-heading">
+                  <div class="field-label-row output-title-row">
+                    <h3 id="live-title">복구 단어 결과</h3>
+                    <button class="help-trigger" type="button" data-help-trigger="result-state-help" aria-expanded="false" aria-controls="result-state-help" aria-label="복구 단어 진행 상태 도움말"><span aria-hidden="true">?</span></button>
+                  </div>
+                  <p id="live-description">입력하면 이곳에 단어 진행이 표시됩니다.</p>
+                </div>
+              </div>
+              <div class="inline-help output-help" id="result-state-help" role="note" tabindex="-1" hidden>
+                <div class="inline-help-head"><strong>언제 이 단어를 사용할 수 있나요?</strong><button type="button" data-help-close aria-label="결과 상태 도움말 닫기">닫기</button></div>
+                <p><strong>만드는 중</strong> 또는 <strong>미리보기</strong> 상태의 단어는 실제 지갑에 사용하지 마세요. 앞 단어가 보이더라도 아직 완전한 복구 문구가 아닙니다.</p>
+                <p>마지막 단어는 남은 난수 비트와 SHA-256 체크섬 비트가 합쳐져 만들어집니다. 비트 직접 사용은 <strong>복구 단어 완성</strong>, 기록 SHA-256은 <strong>수집 기준 충족</strong>과 복사용 전체 텍스트가 표시된 뒤에만 사용할 수 있습니다.</p>
+                <p>BIP39 패스프레이즈(때때로 ‘25번째 단어’라고 부름)는 여기서 계산하는 마지막 단어와 별개이며 이 도구의 범위에 포함되지 않습니다.</p>
+              </div>
+              <div class="card-body">
+                <p class="live-status empty-output" id="live-status">아직 입력이 없습니다.</p>
+                <div class="mnemonic-text-wrap" id="mnemonic-copy-wrap" hidden>
+                  <label for="mnemonic-text">현재 입력으로 계산된 전체 복구 단어 · 복사용 텍스트</label>
+                  <textarea class="mnemonic-text" id="mnemonic-text" lang="en" readonly autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" aria-describedby="mnemonic-text-help"></textarea>
+                  <p class="mnemonic-text-help" id="mnemonic-text-help">컴퓨터에서는 전체 선택 후 복사하고, 휴대폰에서는 길게 눌러 전체 선택하세요. 클립보드에 남은 비밀은 사용 후 직접 지우세요.</p>
+                </div>
+                <ol class="mnemonic-grid live-grid" id="live-mnemonic-grid" aria-label="현재 단어 진행"></ol>
+                <section class="result-panel" id="result-panel" aria-labelledby="result-section-title" hidden>
+                  <h4 class="sr-only" id="result-section-title">마지막 단어와 검증 정보</h4>
+                  <div class="sensitive" id="sensitive-result" hidden>
+                    <div class="sensitive-head">
+                      <button class="secondary-button" id="cover" type="button">화면 전체 가리기</button>
+                    </div>
+                    <p class="result-notice" id="result-notice" hidden></p>
+                    <details class="result-details">
+                      <summary id="result-heading">마지막 단어와 검증 정보</summary>
+                      <p class="last-word-explanation">남은 난수 비트와 오타 검사용 체크섬을 합친 11비트가 BIP39 영문 목록에서 마지막 단어 하나를 고릅니다. 체크섬은 일부 오타를 찾을 뿐 난수를 늘리거나 원래 지갑임을 증명하지 않습니다.</p>
+                      <div class="last-card">
+                        <div>
+                          <p class="last-label" id="last-ordinal">마지막 단어</p>
+                          <p class="last-word" id="last-word" lang="en"></p>
+                          <p class="last-index" id="last-index"></p>
+                        </div>
+                        <div>
+                          <p class="bit-title">마지막 11비트의 구성</p>
+                          <div class="bits">
+                            <span class="bit-group entropy" id="last-entropy-bits"></span>
+                            <span class="plus" aria-hidden="true">+</span>
+                            <span class="bit-group checksum" id="last-checksum-bits"></span>
+                          </div>
+                          <div class="bit-legend"><span>초록 · 남은 난수</span><span>노랑 · 오타 검사용 체크섬</span></div>
+                        </div>
+                      </div>
+                      <details class="verification-details">
+                        <summary>독립 검증용 민감 정보</summary>
+                        <p class="secret-code">변환 방식: <span id="result-method"></span></p>
+                        <p class="secret-code">엔트로피(binary): <span id="entropy-binary"></span></p>
+                        <p class="secret-code">엔트로피(hex): <span id="entropy-hex"></span></p>
+                        <p class="secret-code">체크섬(bits): <span id="checksum"></span></p>
+                      </details>
+                      <p class="fine-print">이 값과 니모닉은 같은 비밀입니다. 사진·클라우드·메신저·온라인 검증기에 입력하지 마세요. JavaScript 메모리의 완전 삭제는 보장할 수 없습니다.</p>
+                    </details>
+                  </div>
+                </section>
+              </div>
+            </section>
+
+            <details class="input-processing-details">
+              <summary>입력 기록과 계산 과정 확인</summary>
+              <div class="transcript">
+                <p class="transcript-note">위 입력창과 같은 기록을 계산 단계별로 보여줍니다. 별도의 두 번째 입력 기록이 아닙니다.</p>
+                <div class="transcript-head">
+                  <h3>입력별 변환·대기·폐기 상태</h3>
+                  <span>계산 검증용 상세</span>
+                </div>
+                <ol class="sequence-groups" id="sequence-groups" tabindex="0" aria-label="입력 순번, 실제 입력값, 계산 반영 결과"></ol>
+                <div class="transcript-head">
+                  <h3 id="converted-title">BIP39 엔트로피로 쓰는 비트</h3>
+                  <span id="converted-count">0비트</span>
+                </div>
+                <p class="transcript-note bit-stream-note" id="converted-note" hidden></p>
+                <p class="converted-bits" id="converted-bits">아직 변환된 비트 없음</p>
+                <div class="used-bits-wrap" id="used-bits-wrap" hidden>
+                  <strong>최종 사용 엔트로피</strong>
+                  <p class="converted-bits" id="used-bits"></p>
+                </div>
+              </div>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      </div>
+    </div>
+  </main>
+
+  <footer class="shell">
+    <p>규격: BIP-0039 · 영문 wordlist 2,048개 내장 · 목록 SHA-256: 2f5eed53…b24dbda</p>
+  </footer>
+
+  <div class="screen-cover" id="screen-cover" aria-hidden="true" hidden>
+    <div class="screen-cover-box">
+      <h2>화면을 가렸습니다</h2>
+      <p>화면만 숨겼습니다. 입력·결과·운영체제 클립보드는 지워지지 않았습니다.</p>
+      <button class="primary-button" id="uncover-screen" type="button">화면 다시 보기</button>
+    </div>
+  </div>
+
+  <div class="sr-only" id="announcement" aria-live="polite"></div>
+
+  <script>
+/*__BIP39_CORE__*/
+  </script>
+  <script>
+/*__BIP39_APP__*/
+  </script>
+</body>
+</html>
