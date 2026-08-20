@@ -77,6 +77,8 @@ assert.match(app, /!hadCopyableResult && nowCopyableResult/);
 assert.match(app, /hadCopyableResult && !nowCopyableResult/);
 assert.doesNotMatch(template, /Ian|Coleman|이안|콜먼/);
 assert.match(styles, /button, summary, \.task-option \{ touch-action: manipulation; \}/);
+assert.match(styles, /html, body \{ touch-action: manipulation; \}/);
+assert.match(styles, /select, textarea, input \{ font-size: 1rem; \}/);
 assert.doesNotMatch(template, /user-scalable\s*=\s*no|maximum-scale\s*=\s*1/i);
 assert.match(template, /<meta name="theme-color" content="#ffffff">/);
 assert.match(styles, /color-scheme:\s*light/);

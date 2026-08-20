@@ -27,6 +27,7 @@
 [hidden] { display: none !important; }
 
 html { min-height: 100%; background: var(--bg); -webkit-text-size-adjust: 100%; }
+html, body { touch-action: manipulation; }
 
 body {
   min-height: 100vh;
@@ -504,7 +505,7 @@ footer p { margin: 0; }
   .mnemonic-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mnemonic-grid li { padding: 8px; }
   .word-value { font-size: 0.85rem; }
-  textarea { font-size: 1rem; }
+  select, textarea, input { font-size: 1rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
