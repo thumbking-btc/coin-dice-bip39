@@ -1,1 +1,1 @@
-782f7bdfcdaab6759912ac794159caa2e49db5c9280d064dd4e7bcced7024a7d *coin-dice-bip39.html
+58a7c32df35c400678338e25cf02f498d92d3cfd5f8cb12304164e02a1c1563f *coin-dice-bip39.html

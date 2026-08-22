@@ -11,6 +11,26 @@ const vectors = JSON.parse(fs.readFileSync(path.join(__dirname, "refs", "vectors
 
 assert.strictEqual(core.selfTest(wordlist), true);
 
+const fourLetterPrefixes = new Map();
+wordlist.forEach(function (word) {
+  if (word.length < 4) return;
+  const prefix = word.slice(0, 4);
+  assert.strictEqual(fourLetterPrefixes.has(prefix), false, "unique BIP39 four-letter prefix: " + prefix);
+  fourLetterPrefixes.set(prefix, word);
+});
+assert.strictEqual(fourLetterPrefixes.get("aban"), "abandon");
+assert.deepStrictEqual(
+  wordlist.filter(function (word) { return word.startsWith("act"); }),
+  ["act", "action", "actor", "actress", "actual"]
+);
+assert.strictEqual(wordlist.includes("act"), true, "a complete short BIP39 word remains valid beside longer prefix matches");
+assert.deepStrictEqual(core.wordPrefixCandidates("ABAN", wordlist), ["abandon"]);
+assert.deepStrictEqual(core.wordPrefixCandidates("act", wordlist), ["act", "action", "actor", "actress", "actual"]);
+assert.deepStrictEqual(core.wordPrefixCandidates("act!", wordlist), []);
+const originalDraft = ["abandon", "ability"];
+assert.deepStrictEqual(core.distributeWordDraft(originalDraft, 1, ["about", "above"]), ["abandon", "about", "above"]);
+assert.deepStrictEqual(originalDraft, ["abandon", "ability"], "word distribution must not mutate its source draft");
+
 vectors.forEach(function (vector, index) {
   const result = core.entropyBytesToMnemonic(core.hexToBytes(vector[0]), wordlist);
   assert.strictEqual(result.mnemonic, vector[1], "mnemonic vector " + index);

@@ -9,6 +9,7 @@
   const HASH_MODE = "cumulative-transcript-sha256-v1";
   const VARIABLE_METHOD = "dice-variable-bits-v1";
   const PAIR_METHOD = "dice-pair-rejection-v1";
+  const CANDIDATE_SUGGESTION_LIMIT = 48;
 
   const state = {
     events: [],
@@ -20,6 +21,8 @@
     draftValid: true,
     inputError: "",
     candidateResult: null,
+    candidateDraft: [],
+    activeCandidateWordIndex: -1,
     activeHelpTrigger: null,
     physicalAnnouncementKey: "",
     physicalRevision: 0,
@@ -90,7 +93,14 @@
     checksum: document.getElementById("checksum"),
     candidateWords: document.getElementById("candidate-word-count"),
     candidatePrefixLabel: document.getElementById("candidate-prefix-label"),
+    candidateEntry: document.getElementById("candidate-entry"),
     candidatePrefix: document.getElementById("candidate-prefix"),
+    candidateWordGrid: document.getElementById("candidate-word-grid"),
+    candidateSuggestions: document.getElementById("candidate-suggestions"),
+    candidateSuggestionTitle: document.getElementById("candidate-suggestion-title"),
+    candidateSuggestionCount: document.getElementById("candidate-suggestion-count"),
+    candidateSuggestionList: document.getElementById("candidate-suggestion-list"),
+    candidateSelectAll: document.getElementById("candidate-select-all"),
     candidateCount: document.getElementById("candidate-input-count"),
     candidateExplanation: document.getElementById("candidate-explanation"),
     candidateStatus: document.getElementById("candidate-status"),
@@ -1011,9 +1021,30 @@
     return candidateFullWordCount() - 1;
   }
 
-  function candidateInputWords() {
-    const value = elements.candidatePrefix.value.trim();
-    return value ? value.split(/\s+/) : [];
+  function candidateWordsFromSentence(value) {
+    const trimmed = String(value || "").trim();
+    return trimmed ? trimmed.split(/\s+/) : [];
+  }
+
+  function candidatePrefixMatches(value) {
+    return core.wordPrefixCandidates(value, WORDLIST);
+  }
+
+  function candidateInputSnapshot() {
+    const required = candidateRequiredPrefixCount();
+    const words = Array.from({ length: required }, function (_, index) {
+      return String(state.candidateDraft[index] || "").trim();
+    });
+    const extras = state.candidateDraft.slice(required).map(function (word) {
+      return String(word || "").trim();
+    }).filter(Boolean);
+    const filled = words.filter(Boolean).length;
+    return {
+      words: words,
+      extras: extras,
+      filled: filled,
+      validation: validateCandidateWords(words, extras)
+    };
   }
 
   function clearCandidateResult() {
@@ -1032,17 +1063,215 @@
     elements.candidateResults.hidden = true;
   }
 
-  function validateCandidateWords(words) {
+  function validateCandidateWords(words, extras) {
     const required = candidateRequiredPrefixCount();
+    if (extras && extras.length) {
+      return { valid: false, kind: "invalid", error: "앞 " + required + "단어만 필요합니다. 뒤에 " + extras.length + "개가 더 입력되어 있습니다." };
+    }
     for (let index = 0; index < words.length; index += 1) {
-      if (!WORD_POSITIONS.has(words[index])) {
-        return { valid: false, error: (index + 1) + "번째 단어 ‘" + words[index] + "’는 BIP39 영문 목록에 없습니다." };
+      const word = words[index];
+      if (!word) {
+        return { valid: false, kind: "empty", error: (index + 1) + "번째 단어를 입력하세요." };
+      }
+      if (!WORD_POSITIONS.has(word)) {
+        const matches = candidatePrefixMatches(word);
+        if (matches.length) {
+          return { valid: false, kind: "partial", error: (index + 1) + "번째 단어를 더 입력하거나 후보에서 선택하세요." };
+        }
+        return { valid: false, kind: "invalid", error: (index + 1) + "번째 단어 ‘" + word + "’는 BIP39 영문 목록에 없습니다." };
       }
     }
-    if (words.length !== required) {
-      return { valid: false, error: required + "개가 필요합니다. 현재 " + words.length + "개입니다." };
+    return { valid: true, kind: "valid", error: "" };
+  }
+
+  function closeCandidateSuggestions() {
+    const activeInput = elements.candidateWordGrid.querySelector("[data-candidate-word-index='" + state.activeCandidateWordIndex + "']");
+    if (activeInput) activeInput.setAttribute("aria-expanded", "false");
+    elements.candidateSuggestions.hidden = true;
+    elements.candidateSuggestionList.replaceChildren();
+    elements.candidateEntry.appendChild(elements.candidateSuggestions);
+    state.activeCandidateWordIndex = -1;
+  }
+
+  function focusCandidateWord(index) {
+    const input = elements.candidateWordGrid.querySelector("[data-candidate-word-index='" + index + "']");
+    if (!input) return false;
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+    return true;
+  }
+
+  function syncCandidateSentenceFromDraft() {
+    let last = state.candidateDraft.length - 1;
+    while (last >= 0 && !String(state.candidateDraft[last] || "").trim()) last -= 1;
+    elements.candidatePrefix.value = last >= 0 ? state.candidateDraft.slice(0, last + 1).join(" ") : "";
+    fitCandidatePrefix();
+  }
+
+  function updateCandidateWordFields() {
+    elements.candidateWordGrid.querySelectorAll(".candidate-word-input").forEach(function (input, index) {
+      const value = String(state.candidateDraft[index] || "").trim();
+      if (input.value !== value) input.value = value;
+      const field = input.closest(".candidate-word-field");
+      const exact = WORD_POSITIONS.has(value);
+      const matches = value && !exact ? candidatePrefixMatches(value) : [];
+      field.classList.toggle("valid-word", exact);
+      field.classList.toggle("partial-word", Boolean(value) && !exact && matches.length > 0);
+      field.classList.toggle("invalid-word", Boolean(value) && !exact && matches.length === 0);
+      input.setAttribute("aria-invalid", Boolean(value) && !exact && matches.length === 0 ? "true" : "false");
+    });
+  }
+
+  function selectCandidateWord(index, word) {
+    state.candidateDraft[index] = word;
+    closeCandidateSuggestions();
+    syncCandidateSentenceFromDraft();
+    updateCandidateWordFields();
+    invalidateCandidateOnEdit();
+    const required = candidateRequiredPrefixCount();
+    if (index + 1 < required) focusCandidateWord(index + 1);
+    else elements.candidateCalculate.focus();
+    elements.announcement.textContent = (index + 1) + "번째 단어를 ‘" + word + "’로 입력했습니다.";
+  }
+
+  function handleSuggestionKeydown(event, index, word) {
+    const buttons = Array.from(elements.candidateSuggestionList.querySelectorAll("button"));
+    const current = buttons.indexOf(event.currentTarget);
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      if (buttons.length) buttons[(current + 1) % buttons.length].focus();
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      if (buttons.length) buttons[(current - 1 + buttons.length) % buttons.length].focus();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      closeCandidateSuggestions();
+      focusCandidateWord(index);
+    } else if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      selectCandidateWord(index, word);
     }
-    return { valid: true, error: "" };
+  }
+
+  function showCandidateSuggestions(index) {
+    const input = elements.candidateWordGrid.querySelector("[data-candidate-word-index='" + index + "']");
+    if (!input) return;
+    const matches = candidatePrefixMatches(input.value);
+    closeCandidateSuggestions();
+    if (!input.value.trim() || !matches.length) return;
+    state.activeCandidateWordIndex = index;
+    input.setAttribute("aria-expanded", "true");
+    elements.candidateSuggestionTitle.textContent = (index + 1) + "번째 단어 후보";
+    elements.candidateSuggestionCount.textContent = matches.length > CANDIDATE_SUGGESTION_LIMIT
+      ? matches.length + "개 · 앞 " + CANDIDATE_SUGGESTION_LIMIT + "개 표시"
+      : matches.length + "개";
+    matches.slice(0, CANDIDATE_SUGGESTION_LIMIT).forEach(function (word) {
+      const button = document.createElement("button");
+      button.className = "candidate-suggestion";
+      button.type = "button";
+      button.setAttribute("role", "option");
+      button.setAttribute("aria-selected", "false");
+      const value = document.createElement("span");
+      value.textContent = word;
+      value.lang = "en";
+      const hint = document.createElement("small");
+      hint.textContent = word.length <= 3 ? "전체 단어" : word.slice(0, 4);
+      button.append(value, hint);
+      button.addEventListener("click", function () { selectCandidateWord(index, word); });
+      button.addEventListener("keydown", function (event) { handleSuggestionKeydown(event, index, word); });
+      elements.candidateSuggestionList.appendChild(button);
+    });
+    input.closest(".candidate-word-field").appendChild(elements.candidateSuggestions);
+    elements.candidateSuggestions.hidden = false;
+  }
+
+  function distributeCandidateWords(startIndex, words) {
+    state.candidateDraft = core.distributeWordDraft(state.candidateDraft, startIndex, words);
+    syncCandidateSentenceFromDraft();
+    updateCandidateWordFields();
+    invalidateCandidateOnEdit();
+    const nextIndex = Math.min(startIndex + words.length, candidateRequiredPrefixCount() - 1);
+    focusCandidateWord(nextIndex);
+    showCandidateSuggestions(nextIndex);
+  }
+
+  function bindCandidateWordInput(input, index) {
+    input.addEventListener("focus", function () { showCandidateSuggestions(index); });
+    input.addEventListener("input", function () {
+      const compact = input.value.replace(/\s+/g, "");
+      if (input.value !== compact) input.value = compact;
+      state.candidateDraft[index] = compact;
+      syncCandidateSentenceFromDraft();
+      updateCandidateWordFields();
+      invalidateCandidateOnEdit();
+      showCandidateSuggestions(index);
+    });
+    input.addEventListener("paste", function (event) {
+      const clipboard = event.clipboardData;
+      const pasted = clipboard ? clipboard.getData("text") : "";
+      const words = candidateWordsFromSentence(pasted);
+      if (words.length <= 1 && pasted.trim() === pasted) return;
+      event.preventDefault();
+      if (!words.length) return;
+      distributeCandidateWords(index, words);
+      elements.announcement.textContent = words.length + "개 단어를 " + (index + 1) + "번째 칸부터 나눠 넣었습니다.";
+    });
+    input.addEventListener("keydown", function (event) {
+      const matches = candidatePrefixMatches(input.value);
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        showCandidateSuggestions(index);
+        const first = elements.candidateSuggestionList.querySelector("button");
+        if (first) first.focus();
+      } else if (event.key === "Enter" && matches.length === 1) {
+        event.preventDefault();
+        selectCandidateWord(index, matches[0]);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        closeCandidateSuggestions();
+      } else if (event.key === "Backspace" && !input.value && index > 0) {
+        event.preventDefault();
+        focusCandidateWord(index - 1);
+      }
+    });
+    input.addEventListener("blur", function () {
+      window.setTimeout(function () {
+        if (elements.candidateSuggestions.contains(document.activeElement)) return;
+        if (document.activeElement && document.activeElement.classList.contains("candidate-word-input")) return;
+        closeCandidateSuggestions();
+      }, 0);
+    });
+  }
+
+  function renderCandidateWordInputs() {
+    closeCandidateSuggestions();
+    elements.candidateWordGrid.replaceChildren();
+    const required = candidateRequiredPrefixCount();
+    for (let index = 0; index < required; index += 1) {
+      const field = document.createElement("div");
+      field.className = "candidate-word-field";
+      const number = document.createElement("span");
+      number.className = "candidate-word-number";
+      number.textContent = String(index + 1).padStart(2, "0");
+      const input = document.createElement("input");
+      input.className = "candidate-word-input";
+      input.type = "text";
+      input.lang = "en";
+      input.autocomplete = "off";
+      input.autocorrect = "off";
+      input.setAttribute("autocapitalize", "none");
+      input.spellcheck = false;
+      input.placeholder = "단어";
+      input.dataset.candidateWordIndex = String(index);
+      input.setAttribute("aria-label", (index + 1) + "번째 BIP39 단어");
+      input.setAttribute("aria-autocomplete", "list");
+      input.setAttribute("aria-controls", "candidate-suggestion-list");
+      input.setAttribute("aria-expanded", "false");
+      field.append(number, input);
+      elements.candidateWordGrid.appendChild(field);
+      bindCandidateWordInput(input, index);
+    }
+    updateCandidateWordFields();
   }
 
   function renderCandidateGuidance() {
@@ -1051,14 +1280,16 @@
     const entropy = WORD_TO_ENTROPY[full];
     const checksum = entropy / 32;
     const missing = entropy - required * 11;
-    const words = candidateInputWords();
+    const input = candidateInputSnapshot();
     elements.candidatePrefixLabel.textContent = "앞 " + required + "단어";
     elements.candidatePrefix.placeholder = "BIP39 영문 단어 " + required + "개를 공백으로 구분해 입력";
-    elements.candidateCount.textContent = words.length + " / " + required + "단어";
+    elements.candidateCount.textContent = input.filled + " / " + required + "단어" + (input.extras.length ? " · " + input.extras.length + "개 초과" : "");
     elements.candidateExplanation.textContent = "앞 " + required + "단어를 고정하면 가능한 마지막 단어는 " + (2 ** missing) + "개입니다. 모르는 난수 " + missing + "비트마다 체크섬 " + checksum + "비트가 자동 계산됩니다.";
     elements.candidateClear.disabled = elements.candidatePrefix.value.length === 0 && !state.candidateResult;
+    elements.candidateSelectAll.disabled = elements.candidatePrefix.value.length === 0;
+    updateCandidateWordFields();
     fitCandidatePrefix();
-    return { words: words, validation: validateCandidateWords(words) };
+    return input;
   }
 
   function invalidateCandidateOnEdit() {
@@ -1067,10 +1298,11 @@
     const input = renderCandidateGuidance();
     const required = candidateRequiredPrefixCount();
     elements.candidateStatus.className = "candidate-status";
-    if (input.words.length === 0) {
+    if (input.filled === 0 && input.extras.length === 0) {
       elements.candidateStatus.textContent = "앞 단어를 입력한 뒤 가능한 후보 계산을 누르세요.";
-    } else if (input.words.length !== required) {
-      elements.candidateStatus.textContent = required + "개가 필요합니다. 현재 " + input.words.length + "개입니다.";
+    } else if (!input.validation.valid) {
+      elements.candidateStatus.className = "candidate-status" + (input.validation.kind === "invalid" ? " error-text" : "");
+      elements.candidateStatus.textContent = input.validation.error;
     } else {
       elements.candidateStatus.textContent = "단어 수가 맞습니다. 가능한 후보 계산을 눌러 BIP39 형식상 가능한 목록을 만드세요.";
     }
@@ -1103,7 +1335,9 @@
       elements.candidateStatus.className = "candidate-status error-text";
       elements.candidateStatus.textContent = input.validation.error;
       elements.announcement.textContent = input.validation.error;
-      elements.candidatePrefix.focus();
+      const invalidIndex = input.words.findIndex(function (word) { return !WORD_POSITIONS.has(word); });
+      if (invalidIndex >= 0) focusCandidateWord(invalidIndex);
+      else elements.candidatePrefix.focus();
       return;
     }
     try {
@@ -1128,7 +1362,16 @@
 
   function zeroizeCandidateState() {
     clearCandidateResult();
+    closeCandidateSuggestions();
     elements.announcement.textContent = "";
+    elements.candidateWordGrid.querySelectorAll(".candidate-word-input").forEach(function (input) {
+      if (input.value) input.value = "0".repeat(input.value.length);
+      input.value = "";
+    });
+    state.candidateDraft.forEach(function (word, index) {
+      state.candidateDraft[index] = "0".repeat(String(word || "").length);
+    });
+    state.candidateDraft.length = 0;
     const previous = elements.candidatePrefix;
     if (previous.value) {
       previous.value = "0".repeat(previous.value.length);
@@ -1141,6 +1384,7 @@
     previous.replaceWith(replacement);
     elements.candidatePrefix = replacement;
     bindCandidatePrefixElement();
+    renderCandidateWordInputs();
     renderCandidateGuidance();
     elements.candidateStatus.className = "candidate-status";
     elements.candidateStatus.textContent = "앞 단어를 입력한 뒤 가능한 후보 계산을 누르세요.";
@@ -1150,15 +1394,35 @@
     closeContextHelp(false);
     zeroizeCandidateState();
     elements.announcement.textContent = "후보 입력과 계산 결과를 지웠습니다.";
-    elements.candidatePrefix.focus();
+    focusCandidateWord(0);
   }
 
   function bindCandidatePrefixElement() {
-    elements.candidatePrefix.addEventListener("input", invalidateCandidateOnEdit);
+    elements.candidatePrefix.addEventListener("input", function () {
+      closeCandidateSuggestions();
+      state.candidateDraft = candidateWordsFromSentence(elements.candidatePrefix.value);
+      updateCandidateWordFields();
+      invalidateCandidateOnEdit();
+    });
+  }
+
+  function handleCandidateWordCountChange() {
+    closeCandidateSuggestions();
+    clearCandidateResult();
+    renderCandidateWordInputs();
+    invalidateCandidateOnEdit();
+  }
+
+  function selectCandidateSentence() {
+    if (!elements.candidatePrefix.value) return;
+    elements.candidatePrefix.focus();
+    elements.candidatePrefix.select();
+    elements.candidatePrefix.setSelectionRange(0, elements.candidatePrefix.value.length);
+    elements.announcement.textContent = "전체 문장을 선택했습니다. 운영체제의 복사 기능을 사용하세요.";
   }
 
   function hasSensitiveData() {
-    return elements.physicalInput.value.trim().length > 0 || elements.candidatePrefix.value.trim().length > 0 || Boolean(state.candidateResult);
+    return elements.physicalInput.value.trim().length > 0 || state.candidateDraft.some(Boolean) || elements.candidatePrefix.value.trim().length > 0 || Boolean(state.candidateResult);
   }
 
   function coverScreen() {
@@ -1202,12 +1466,13 @@
   elements.cover.addEventListener("click", coverScreen);
   elements.emergencyCover.addEventListener("click", coverScreen);
   elements.uncoverScreen.addEventListener("click", uncoverScreen);
-  elements.candidateWords.addEventListener("change", invalidateCandidateOnEdit);
+  elements.candidateWords.addEventListener("change", handleCandidateWordCountChange);
   elements.candidateMetaToggle.addEventListener("change", function () {
     elements.candidateFlow.classList.toggle("show-candidate-meta", elements.candidateMetaToggle.checked);
   });
   elements.candidateFlow.classList.toggle("show-candidate-meta", elements.candidateMetaToggle.checked);
   bindCandidatePrefixElement();
+  elements.candidateSelectAll.addEventListener("click", selectCandidateSentence);
   elements.candidateCalculate.addEventListener("click", calculateCandidates);
   elements.candidateClear.addEventListener("click", clearCandidates);
   document.querySelectorAll("[data-help-trigger]").forEach(function (trigger) {
@@ -1298,6 +1563,7 @@
     zeroizeCandidateState();
   }
   renderTaskChoice();
+  renderCandidateWordInputs();
   renderCandidateGuidance();
   invalidateCandidateOnEdit();
   if (state.healthy) applyPhysicalTranscript();

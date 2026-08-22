@@ -442,6 +442,23 @@
     };
   }
 
+  function wordPrefixCandidates(prefix, wordlist) {
+    const normalized = String(prefix || "").trim().toLowerCase();
+    if (!Array.isArray(wordlist) || wordlist.length !== 2048 || !normalized || !/^[a-z]+$/.test(normalized)) return [];
+    return wordlist.filter(function (word) { return word.startsWith(normalized); });
+  }
+
+  function distributeWordDraft(draft, startIndex, words) {
+    if (!Array.isArray(draft) || !Array.isArray(words) || !Number.isInteger(startIndex) || startIndex < 0) {
+      throw new Error("단어 분배 입력이 올바르지 않습니다.");
+    }
+    const next = draft.map(function (word) { return String(word || ""); });
+    words.forEach(function (word, offset) {
+      next[startIndex + offset] = String(word || "");
+    });
+    return next;
+  }
+
   function lastWordCandidates(prefixWords, fullWordCount, wordlist) {
     const allowedWordCounts = [12, 15, 18, 21, 24];
     if (!allowedWordCounts.includes(fullWordCount)) {
@@ -543,6 +560,14 @@
     if (candidateTest.candidateCount !== 128 || candidateTest.candidates[0].lastWord !== "about" || candidateTest.candidates[127].lastWord !== "wrap") {
       throw new Error("마지막 단어 후보 자체 검증에 실패했습니다.");
     }
+    const prefixCandidateTest = wordPrefixCandidates("aban", wordlist);
+    if (prefixCandidateTest.length !== 1 || prefixCandidateTest[0] !== "abandon") {
+      throw new Error("BIP39 단어 접두어 검색 자체 검증에 실패했습니다.");
+    }
+    const distributedDraftTest = distributeWordDraft(["abandon", ""], 1, ["ability", "able"]);
+    if (distributedDraftTest.join(" ") !== "abandon ability able") {
+      throw new Error("BIP39 단어 붙여넣기 분배 자체 검증에 실패했습니다.");
+    }
     return true;
   }
 
@@ -566,6 +591,8 @@
     variableLengthDiceRollsToBits: variableLengthDiceRollsToBits,
     analyzeDirectInputCapacity: analyzeDirectInputCapacity,
     transcriptHashToBits: transcriptHashToBits,
+    wordPrefixCandidates: wordPrefixCandidates,
+    distributeWordDraft: distributeWordDraft,
     lastWordCandidates: lastWordCandidates,
     selfTest: selfTest
   });

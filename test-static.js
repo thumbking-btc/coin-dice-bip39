@@ -80,6 +80,18 @@ assert.match(app, /config\.derivation !== HASH_MODE \|\| state\.process\.complet
 assert.match(app, /!hadCopyableResult && nowCopyableResult/);
 assert.match(app, /hadCopyableResult && !nowCopyableResult/);
 assert.doesNotMatch(template, /Ian|Coleman|이안|콜먼/);
+assert.match(template, /id="candidate-word-grid"[^>]*aria-label="마지막 단어 전까지의 BIP39 단어 입력"/);
+assert.match(template, /id="candidate-suggestion-list"[^>]*role="listbox"/);
+assert.match(template, /전체 문장 · 붙여넣기 및 복사/);
+assert.match(template, /id="candidate-select-all"[^>]*disabled/);
+assert.match(template, /11·23단어를 한 번에 붙여넣어도 위 칸에 자동으로 나뉩니다/);
+assert.match(app, /function candidatePrefixMatches/);
+assert.match(app, /function distributeCandidateWords/);
+assert.match(app, /clipboardData[\s\S]*getData\("text"\)/);
+assert.match(app, /state\.candidateDraft = candidateWordsFromSentence\(elements\.candidatePrefix\.value\)/);
+assert.match(app, /elements\.candidatePrefix\.select\(\)/);
+assert.match(styles, /\.candidate-word-grid \{[^}]*grid-template-columns: repeat\(3,/s);
+assert.match(styles, /\.candidate-suggestions \{[^}]*position: absolute;[^}]*z-index: 40;/s);
 assert.match(styles, /button, summary, \.task-option \{ touch-action: manipulation; \}/);
 assert.match(styles, /html, body \{ touch-action: manipulation; \}/);
 assert.match(styles, /select, textarea, input \{ font-size: 1rem; \}/);
