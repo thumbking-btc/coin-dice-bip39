@@ -1,0 +1,3 @@
+dist/coin-dice-bip39.html -text
+dist/SHA256SUMS.txt text eol=lf
+index.html -text
