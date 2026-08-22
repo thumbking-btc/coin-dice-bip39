@@ -13,11 +13,15 @@ const wordlistPath = path.join(__dirname, "refs", "english.txt");
 const outputPath = path.join(root, "dist", "coin-dice-bip39.html");
 const checksumPath = path.join(root, "dist", "SHA256SUMS.txt");
 
-const template = fs.readFileSync(templatePath, "utf8");
-const styles = fs.readFileSync(stylePath, "utf8");
-const core = fs.readFileSync(corePath, "utf8");
-const app = fs.readFileSync(appPath, "utf8");
-const wordlist = fs.readFileSync(wordlistPath, "utf8").replace(/\r\n/g, "\n");
+function readTextLf(filePath) {
+  return fs.readFileSync(filePath, "utf8").replace(/\r\n?/g, "\n");
+}
+
+const template = readTextLf(templatePath);
+const styles = readTextLf(stylePath);
+const core = readTextLf(corePath);
+const app = readTextLf(appPath);
+const wordlist = readTextLf(wordlistPath);
 
 if (wordlist.trim().split("\n").length !== 2048) {
   throw new Error("Expected exactly 2,048 BIP39 English words.");
