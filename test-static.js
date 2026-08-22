@@ -6,11 +6,15 @@ const fs = require("fs");
 const path = require("path");
 
 const root = __dirname;
-const template = fs.readFileSync(path.join(__dirname, "src", "app.template.html"), "utf8");
-const styles = fs.readFileSync(path.join(__dirname, "src", "app.css"), "utf8");
-const core = fs.readFileSync(path.join(__dirname, "src", "bip39-core.js"), "utf8");
-const app = fs.readFileSync(path.join(__dirname, "src", "app.js"), "utf8");
-const wordlist = fs.readFileSync(path.join(__dirname, "refs", "english.txt"), "utf8").replace(/\r\n/g, "\n");
+function readTextLf(filePath) {
+  return fs.readFileSync(filePath, "utf8").replace(/\r\n?/g, "\n");
+}
+
+const template = readTextLf(path.join(__dirname, "src", "app.template.html"));
+const styles = readTextLf(path.join(__dirname, "src", "app.css"));
+const core = readTextLf(path.join(__dirname, "src", "bip39-core.js"));
+const app = readTextLf(path.join(__dirname, "src", "app.js"));
+const wordlist = readTextLf(path.join(__dirname, "refs", "english.txt"));
 const outputPath = path.join(root, "dist", "coin-dice-bip39.html");
 const checksumPath = path.join(root, "dist", "SHA256SUMS.txt");
 const output = fs.readFileSync(outputPath, "utf8");
